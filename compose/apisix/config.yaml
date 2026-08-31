@@ -1,0 +1,40 @@
+---
+apisix:
+  node_listen:
+    - 9080
+  enable_admin: true
+  enable_admin_cors: false
+  enable_control: true
+  control:
+    ip: 127.0.0.1
+    port: 9090
+
+deployment:
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+  admin:
+    admin_key:
+      - name: control-plane
+        key: ${{APISIX_ADMIN_KEY}}
+        role: admin
+    allow_admin:
+      - 127.0.0.0/24
+      - 172.28.0.0/24
+    admin_listen:
+      ip: 0.0.0.0
+      port: 9180
+  etcd:
+    host:
+      - http://etcd:2379
+    prefix: /apisix
+    timeout: 30
+
+nginx_config:
+  error_log_level: warn
+
+plugin_attr:
+  prometheus:
+    export_addr:
+      ip: 0.0.0.0
+      port: 9091

@@ -5,12 +5,13 @@ platform. It owns declarative infrastructure and deployment automation; it does
 not own tenant-management business logic or canonical cross-repository
 contracts.
 
-## Foundation 0 status
+## Foundation status
 
-The initial architecture and trust boundaries are accepted. No runtime
-infrastructure is introduced in Foundation 0. The next foundation will add a
-local Docker Compose topology after the contracts in `nabhold/shared` are
-reviewed.
+Foundation 0 established the architecture and trust boundaries. Foundation 1
+adds the local Docker Compose topology under `compose/`; it remains development
+infrastructure and is not a production deployment template.
+
+Start with the [local platform runbook](docs/runbooks/local-platform.md).
 
 ## Ownership
 

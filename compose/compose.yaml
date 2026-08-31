@@ -1,0 +1,220 @@
+---
+name: ${COMPOSE_PROJECT_NAME:-nabhold-platform}
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  etcd:
+    <<: *service-defaults
+    image: gcr.io/etcd-development/etcd:v3.6.14
+    command:
+      - /usr/local/bin/etcd
+      - --name=apisix-etcd
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=apisix-etcd=http://etcd:2380
+      - --initial-cluster-token=nabhold-local-apisix
+      - --initial-cluster-state=new
+      - --auto-compaction-mode=revision
+      - --auto-compaction-retention=1000
+      - --quota-backend-bytes=2147483648
+    volumes:
+      - etcd_data:/etcd-data
+    networks:
+      control:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/etcdctl
+        - --endpoints=http://127.0.0.1:2379
+        - endpoint
+        - health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  apisix:
+    <<: *service-defaults
+    image: apache/apisix:3.18.0-debian
+    environment:
+      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:?required}
+    volumes:
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+    ports:
+      - 127.0.0.1:${APISIX_HTTP_PORT:-9080}:9080
+      - 127.0.0.1:${APISIX_ADMIN_PORT:-9180}:9180
+    networks:
+      edge: {}
+      control:
+        ipv4_address: 172.28.0.20
+      observability: {}
+    depends_on:
+      etcd:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, apisix, status]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  postgresql:
+    <<: *service-defaults
+    image: postgres:17.11-alpine3.24
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    ports:
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
+    networks:
+      - data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  rabbitmq:
+    <<: *service-defaults
+    image: rabbitmq:4.3.5-management-alpine
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?required}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-nabhold}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    ports:
+      - 127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672
+      - 127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672
+    networks:
+      - data
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  redis:
+    <<: *service-defaults
+    image: redis:7.4.11-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?required}
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        exec redis-server --appendonly yes --appendfsync everysec
+        --requirepass "$${REDIS_PASSWORD}" --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    ports:
+      - 127.0.0.1:${REDIS_PORT:-6379}:6379
+    networks:
+      - data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          redis-cli --no-auth-warning -a "$${REDIS_PASSWORD}" ping
+          | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  otel-collector:
+    <<: *service-defaults
+    image: otel/opentelemetry-collector-contrib:0.159.0
+    command: [--config=/etc/otelcol-contrib/config.yaml]
+    volumes:
+      - ./otel/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - 127.0.0.1:${OTEL_GRPC_PORT:-4317}:4317
+      - 127.0.0.1:${OTEL_HTTP_PORT:-4318}:4318
+      - 127.0.0.1:${OTEL_HEALTH_PORT:-13133}:13133
+    networks:
+      - observability
+
+  smoke:
+    image: curlimages/curl:8.16.0
+    profiles: [verify]
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:?required}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?required}
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        curl --fail --silent --show-error \
+          -H "X-API-KEY: $${APISIX_ADMIN_KEY}" \
+          http://apisix:9180/apisix/admin/routes >/dev/null
+        curl --fail --silent --show-error \
+          -u "$${RABBITMQ_DEFAULT_USER}:$${RABBITMQ_DEFAULT_PASS}" \
+          http://rabbitmq:15672/api/health/checks/ready-to-serve-clients \
+          >/dev/null
+        curl --fail --silent --show-error \
+          http://otel-collector:13133/ >/dev/null
+        echo "Nabhold local platform smoke checks passed."
+    networks:
+      - control
+      - data
+      - observability
+    depends_on:
+      apisix:
+        condition: service_healthy
+      postgresql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+networks:
+  edge:
+    driver: bridge
+  control:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+  data:
+    driver: bridge
+    internal: true
+  observability:
+    driver: bridge
+    internal: true
+
+volumes:
+  etcd_data:
+  postgresql_data:
+  rabbitmq_data:
+  redis_data:
