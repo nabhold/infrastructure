@@ -1,0 +1,9 @@
+# Local-only credentials and Compose state
+compose/.env
+compose/*.override.yaml
+
+# Terraform state must never be committed when Terraform is introduced.
+*.tfstate
+*.tfstate.*
+.terraform/
+
