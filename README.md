@@ -72,3 +72,10 @@ docs/runbooks/           Operational procedures
 Production is targeted at AWS Cape Town (`af-south-1`) through Terraform.
 Kubernetes, Helm, and Temporal are deliberately deferred until operational need
 justifies their additional machinery.
+
+## Foundation 4
+
+Codespaces uses `ghcr.io/nabhold/baobab-dev:1.2.6`. The SHA-pinned
+`foundation` workflow validates the development contract and reproducibility,
+then scans dependencies, configuration, secrets, and applicable containers.
+Protect `main` with pull requests, CODEOWNER review, and required CI checks.
