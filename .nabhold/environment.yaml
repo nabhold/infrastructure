@@ -6,8 +6,8 @@ application:
   version: "0.1.0"
 environment:
   provider: "baobab-dev"
-  profile: "full"
-  minimum_version: "1.2.6"
+  profile: "infra"
+  minimum_version: "1.4.0-rc.0"
   contract_minimum_version: "1.0"
 compatibility_policy:
   strict_runtime_versions: true
@@ -18,6 +18,19 @@ validation:
   required_capabilities:
     - "development.docker"
     - "development.github_cli"
+    - "development.terraform"
+    - "development.aws_cli"
 notes:
-  - "Codespaces uses ghcr.io/nabhold/baobab-dev:1.2.6."
-
+  - "Codespaces uses ghcr.io/nabhold/baobab-dev:1.4.0-rc.0-infra."
+  - >
+    Profile changed from "full" to "infra" (2026-09-03) -- this repo never
+    used full's Python/Node/Flutter/Java/Maven/PostgreSQL client; infra is
+    the lean Terraform + AWS CLI profile baobab-dev now provides
+    specifically for it. See nabhold/shared's
+    contracts/development-environment/schema.yaml for the profile's
+    capability_domains.
+  - >
+    minimum_version assumes baobab-dev's infra-profile work ships as
+    exactly "1.4.0-rc.0" -- confirm the actual tag once cut and update
+    both this value and devcontainer.json's image tag together if it
+    differs.

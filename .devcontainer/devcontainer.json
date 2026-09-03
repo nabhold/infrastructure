@@ -1,13 +1,13 @@
 {
   "name": "Nabhold infrastructure",
-  "image": "ghcr.io/nabhold/baobab-dev:1.2.6",
+  "image": "ghcr.io/nabhold/baobab-dev:1.4.0-rc.0-infra",
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
   "init": true,
   "postCreateCommand": "if [ ! -f compose/.env ]; then cp compose/.env.example compose/.env; fi",
   "customizations": {
     "vscode": {
-      "extensions": ["github.vscode-github-actions", "redhat.vscode-yaml"]
+      "extensions": ["github.vscode-github-actions", "redhat.vscode-yaml", "hashicorp.terraform"]
     }
   }
 }

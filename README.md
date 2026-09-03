@@ -75,7 +75,9 @@ justifies their additional machinery.
 
 ## Foundation 4
 
-Codespaces uses `ghcr.io/nabhold/baobab-dev:1.2.6`. The SHA-pinned
+Codespaces uses `ghcr.io/nabhold/baobab-dev:1.4.0-rc.0-infra` -- the lean
+`infra` profile (Terraform + AWS CLI only, no Python/Node/Flutter/Java),
+not the `full` profile this repo carried before. The SHA-pinned
 `foundation` workflow validates the development contract and reproducibility,
 then scans dependencies, configuration, secrets, and applicable containers.
 Protect `main` with pull requests, CODEOWNER review, and required CI checks.
